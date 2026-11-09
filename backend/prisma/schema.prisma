@@ -1,0 +1,300 @@
+// Prisma schema for Eventify
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ORGANIZER
+  ADMIN
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+  FAILED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum TicketStatus {
+  VALID
+  USED
+  CANCELLED
+}
+
+model User {
+  id                      String                   @id @default(uuid())
+  name                    String
+  email                   String                   @unique
+  password                String
+  role                    Role                     @default(CUSTOMER)
+  isVerified              Boolean                  @default(false)
+  avatar                  String?
+  phone                   String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+
+  events                  Event[]                  @relation("OrganizerEvents")
+  bookings                Booking[]
+  payments                Payment[]
+  reviews                 Review[]
+  notifications           Notification[]
+  auditLogs               AuditLog[]
+  refreshTokens           RefreshToken[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+
+  @@index([role])
+  @@index([email])
+}
+
+model Venue {
+  id          String   @id @default(uuid())
+  name        String
+  address     String
+  city        String
+  state       String
+  country     String   @default("India")
+  pincode     String
+  capacity    Int
+  latitude    Float?
+  longitude   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events      Event[]
+
+  @@index([city])
+}
+
+model Event {
+  id          String      @id @default(uuid())
+  title       String
+  slug        String      @unique
+  description String      @db.Text
+  category    String      // HACKATHON, CONCERT, CONFERENCE, COLLEGE_FEST, WORKSHOP, etc.
+  organizerId String
+  organizer   User        @relation("OrganizerEvents", fields: [organizerId], references: [id], onDelete: Cascade)
+  venueId     String?
+  venue       Venue?      @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  startDate   DateTime
+  endDate     DateTime
+  imageUrl    String?
+  status      EventStatus @default(DRAFT)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  ticketTypes TicketType[]
+  bookings    Booking[]
+  reviews     Review[]
+
+  @@index([status, startDate])
+  @@index([category, status])
+  @@index([organizerId])
+}
+
+model TicketType {
+  id                String        @id @default(uuid())
+  eventId           String
+  event             Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name              String        // e.g. Early Bird, General, VIP, Student Pass
+  description       String?
+  price             Decimal       @db.Decimal(10, 2)
+  totalQuantity     Int
+  availableQuantity Int
+  salesStart        DateTime
+  salesEnd          DateTime
+  maxPerOrder       Int           @default(5)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  bookingItems      BookingItem[]
+  tickets           Ticket[]
+
+  @@index([eventId])
+  @@index([eventId, availableQuantity])
+}
+
+model Booking {
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId        String
+  event          Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  totalAmount    Decimal       @db.Decimal(10, 2)
+  status         BookingStatus @default(PENDING)
+  expiresAt      DateTime
+  idempotencyKey String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  bookingItems   BookingItem[]
+  payments       Payment[]
+  tickets        Ticket[]
+
+  @@index([userId, status])
+  @@index([eventId, status])
+  @@index([expiresAt, status])
+}
+
+model BookingItem {
+  id           String     @id @default(uuid())
+  bookingId    String
+  booking      Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  ticketTypeId String
+  ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  quantity     Int
+  unitPrice    Decimal    @db.Decimal(10, 2)
+  subtotal     Decimal    @db.Decimal(10, 2)
+
+  @@index([bookingId])
+  @@index([ticketTypeId])
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  bookingId         String
+  booking           Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount            Decimal       @db.Decimal(10, 2)
+  provider          String        @default("RAZORPAY")
+  providerOrderId   String?
+  providerPaymentId String?
+  status            PaymentStatus @default(PENDING)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([bookingId])
+  @@index([userId])
+  @@index([providerOrderId])
+}
+
+model Ticket {
+  id           String       @id @default(uuid())
+  bookingId    String
+  booking      Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  ticketTypeId String
+  ticketType   TicketType   @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  ticketCode   String       @unique
+  qrCode       String       @db.Text
+  status       TicketStatus @default(VALID)
+  checkedInAt  DateTime?
+  createdAt    DateTime     @default(now())
+
+  @@index([bookingId])
+  @@index([ticketTypeId])
+  @@index([ticketCode])
+  @@index([status])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int      // 1 to 5
+  comment   String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([eventId, userId])
+  @@index([eventId, rating])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String   @db.Text
+  type      String   @default("SYSTEM") // BOOKING, PAYMENT, REMINDER, EVENT_UPDATE, SYSTEM
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model PaymentWebhookEvent {
+  id              String    @id @default(uuid())
+  provider        String    @default("RAZORPAY")
+  providerEventId String    @unique
+  eventType       String
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([providerEventId])
+}
