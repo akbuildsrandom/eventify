@@ -68,8 +68,8 @@ Configure these environment variables in your Vercel Project Settings:
 | `JWT_ACCESS_SECRET` | 32+ character random secret | `prod_jwt_access_secret_key_random_string` |
 | `JWT_REFRESH_SECRET` | 32+ character random secret | `prod_jwt_refresh_secret_key_random_string` |
 | `COOKIE_SECRET` | 32+ character random secret | `prod_cookie_secret_key_random_string` |
-| `FRONTEND_URL` | Production domain | `https://eventify.vercel.app` |
-| `BACKEND_URL` | API base domain | `https://eventify.vercel.app` |
+| `FRONTEND_URL` | Production domain | `https://eventify-eight-ashen.vercel.app` |
+| `BACKEND_URL` | API base domain | `https://eventify-eight-ashen.vercel.app` |
 | `UPSTASH_REDIS_REST_URL` | Upstash Redis REST URL | `https://your-db.upstash.io` |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST Token | `AXxxxx...` |
 | `RAZORPAY_KEY_ID` | Razorpay Key ID | `rzp_test_xxxxxx` |
